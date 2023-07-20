@@ -1,16 +1,19 @@
+# The following code is adapted from or inspired by the article:
+# "Using GitHub Actions with C++ and CMake" by Cristian Adam.
+# Original article available at: https://cristianadam.eu/20191222/using-github-actions-with-c-plus-plus-and-cmake/
+#
+# Credit and appreciation goes to the original author, Cristian Adam, for sharing the knowledge.
+
 name: CMake Build Matrix
 
 on: [ workflow_dispatch ] # Trigger manually only
 
 env:
-  CMAKE_VERSION: 3.24.3
-  NINJA_VERSION: 1.11.1
-  BUILD_TYPE: Release
-  CCACHE_VERSION: 4.7.3
+  CMAKE_VERSION: 3.20.x
 
 jobs:
   build:
-    name: ${{ matrix.config.name }}
+    name: ${{ matrix.config.name }} - ${{ matrix.config.cmake_preset }}
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
@@ -19,76 +22,68 @@ jobs:
         - {
             name: "Windows Latest MSVC", os: windows-latest,
             cc: "cl", cxx: "cl",
-            environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat"
+            environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+            cmake_preset: DEBUG
           }
-        - {
-            name: "Windows Latest MinGW", os: windows-latest,
-            cc: "gcc", cxx: "g++"
-          }
+        # - {
+            # name: "Windows Latest MSVC", os: windows-latest,
+            # cc: "cl", cxx: "cl",
+            # environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+            # cmake_preset: RELEASE
+          # }
+        # - {
+            # name: "Windows Latest MinGW", os: windows-latest,
+            # cc: "gcc", cxx: "g++",
+            # cmake_preset: DEBUG
+          # }
+        # - {
+            # name: "Windows Latest MinGW", os: windows-latest,
+            # cc: "gcc", cxx: "g++",
+            # cmake_preset: RELEASE
+          # }
         - {
             name: "Ubuntu Latest GCC", os: ubuntu-latest,
-            cc: "gcc", cxx: "g++"
+            cc: "gcc", cxx: "g++",
+            cmake_preset: DEBUG
           }
-        - {
-            name: "macOS Latest Clang", os: macos-latest,
-            cc: "clang", cxx: "clang++"
-          }
+        # - {
+            # name: "Ubuntu Latest GCC", os: ubuntu-latest,
+            # cc: "gcc", cxx: "g++",
+            # cmake_preset: RELEASE
+          # }
+        # - {
+            # name: "macOS Latest Clang", os: macos-latest,
+            # cc: "clang", cxx: "clang++",
+            # cmake_preset: DEBUG
+          # }
+        # - {
+            # name: "macOS Latest Clang", os: macos-latest,
+            # cc: "clang", cxx: "clang++",
+            # cmake_preset: RELEASE
+          # }
 
     steps:
     - name: Checkout source code
       uses: actions/checkout@v3
 
-    - name: Download Ninja and CMake
-      shell: cmake -P {0}
-      run: |
-        set(cmake_version $ENV{CMAKE_VERSION})
-        set(ninja_version $ENV{NINJA_VERSION})
+    - name: Setup cmake
+      uses: jwlawson/actions-setup-cmake@v1.13
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
 
-        message(STATUS "Using host CMake version: ${CMAKE_VERSION}")
+    - name: Verion of cmake
+      run: cmake --version
 
-        if ("${{ runner.os }}" STREQUAL "Windows")
-          set(ninja_suffix "win.zip")
-          set(cmake_suffix "windows-x86_64.zip")
-          set(cmake_dir "cmake-${cmake_version}-windows-x86_64/bin")
-        elseif ("${{ runner.os }}" STREQUAL "Linux")
-          set(ninja_suffix "linux.zip")
-          set(cmake_suffix "linux-x86_64.tar.gz")
-          set(cmake_dir "cmake-${cmake_version}-linux-x86_64/bin")
-        elseif ("${{ runner.os }}" STREQUAL "macOS")
-          set(ninja_suffix "mac.zip")
-          set(cmake_suffix "macos-universal.tar.gz")
-          set(cmake_dir "cmake-${cmake_version}-macos-universal/CMake.app/Contents/bin")
-        endif()
+    - name: Create Build Directory
+      run: mkdir -p ${{ github.workspace }}/build
 
-        set(ninja_url "https://github.com/ninja-build/ninja/releases/download/v${ninja_version}/ninja-${ninja_suffix}")
-        file(DOWNLOAD "${ninja_url}" ./ninja.zip SHOW_PROGRESS)
-        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf ./ninja.zip)
-
-        set(cmake_url "https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}-${cmake_suffix}")
-        file(DOWNLOAD "${cmake_url}" ./cmake.zip SHOW_PROGRESS)
-        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf ./cmake.zip)
-
-        # Add to PATH environment variable
-        file(TO_CMAKE_PATH "$ENV{GITHUB_WORKSPACE}/${cmake_dir}" cmake_dir)
-        set(path_separator ":")
-        if ("${{ runner.os }}" STREQUAL "Windows")
-          set(path_separator ";")
-        endif()
-        file(APPEND "$ENV{GITHUB_PATH}" "$ENV{GITHUB_WORKSPACE}${path_separator}${cmake_dir}")
-
-        if (NOT "${{ runner.os }}" STREQUAL "Windows")
-          execute_process(
-            COMMAND chmod +x ninja
-            COMMAND chmod +x ${cmake_dir}/cmake
-          )
-        endif()
-
-    - name: Configure
+    - name: Run cmake
       shell: cmake -P {0}
       run: |
         set(ENV{CC} ${{ matrix.config.cc }})
         set(ENV{CXX} ${{ matrix.config.cxx }})
 
+        # Run environment script if specified. Save output to file.
         if ("${{ runner.os }}" STREQUAL "Windows" AND NOT "x${{ matrix.config.environment_script }}" STREQUAL "x")
           execute_process(
             COMMAND "${{ matrix.config.environment_script }}" && set
@@ -102,19 +97,19 @@ jobs:
           endforeach()
         endif()
 
+        # Windows path separator is ";".
         set(path_separator ":")
         if ("${{ runner.os }}" STREQUAL "Windows")
           set(path_separator ";")
         endif()
         set(ENV{PATH} "$ENV{GITHUB_WORKSPACE}${path_separator}$ENV{PATH}")
 
+        # Run cmake.
         execute_process(
           COMMAND cmake
             -S .
             -B build
             -D CMAKE_BUILD_TYPE=$ENV{BUILD_TYPE}
-            -G Ninja
-            -D CMAKE_MAKE_PROGRAM=ninja
           RESULT_VARIABLE result
         )
         if (NOT result EQUAL 0)
@@ -124,8 +119,7 @@ jobs:
     - name: Build
       shell: cmake -P {0}
       run: |
-        set(ENV{NINJA_STATUS} "[%f/%t %o/sec] ")
-
+        # Read the output file generated from the envoronment script.
         if ("${{ runner.os }}" STREQUAL "Windows" AND NOT "x${{ matrix.config.environment_script }}" STREQUAL "x")
           file(STRINGS environment_script_output.txt output_lines)
           foreach(line IN LISTS output_lines)
@@ -135,6 +129,7 @@ jobs:
           endforeach()
         endif()
 
+        # Run build
         execute_process(
           COMMAND cmake --build build
           RESULT_VARIABLE result
@@ -171,3 +166,5 @@ jobs:
           message("::error::${test_results}")
           message(FATAL_ERROR "Running tests failed!")
         endif()
+
+
