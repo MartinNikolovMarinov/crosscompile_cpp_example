@@ -25,42 +25,32 @@ jobs:
             environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
             cmake_preset: DEBUG
           }
-        # - {
-            # name: "Windows Latest MSVC", os: windows-latest,
-            # cc: "cl", cxx: "cl",
-            # environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            # cmake_preset: RELEASE
-          # }
-        # - {
-            # name: "Windows Latest MinGW", os: windows-latest,
-            # cc: "gcc", cxx: "g++",
-            # cmake_preset: DEBUG
-          # }
-        # - {
-            # name: "Windows Latest MinGW", os: windows-latest,
-            # cc: "gcc", cxx: "g++",
-            # cmake_preset: RELEASE
-          # }
+        - {
+            name: "Windows Latest MSVC", os: windows-latest,
+            cc: "cl", cxx: "cl",
+            environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+            cmake_preset: RELEASE
+          }
         - {
             name: "Ubuntu Latest GCC", os: ubuntu-latest,
             cc: "gcc", cxx: "g++",
             cmake_preset: DEBUG
           }
-        # - {
-            # name: "Ubuntu Latest GCC", os: ubuntu-latest,
-            # cc: "gcc", cxx: "g++",
-            # cmake_preset: RELEASE
-          # }
-        # - {
-            # name: "macOS Latest Clang", os: macos-latest,
-            # cc: "clang", cxx: "clang++",
-            # cmake_preset: DEBUG
-          # }
-        # - {
-            # name: "macOS Latest Clang", os: macos-latest,
-            # cc: "clang", cxx: "clang++",
-            # cmake_preset: RELEASE
-          # }
+        - {
+            name: "Ubuntu Latest GCC", os: ubuntu-latest,
+            cc: "gcc", cxx: "g++",
+            cmake_preset: RELEASE
+          }
+        - {
+            name: "macOS Latest Clang", os: macos-latest,
+            cc: "clang", cxx: "clang++",
+            cmake_preset: DEBUG
+          }
+        - {
+            name: "macOS Latest Clang", os: macos-latest,
+            cc: "clang", cxx: "clang++",
+            cmake_preset: RELEASE
+          }
 
     steps:
     - name: Checkout source code
@@ -147,13 +137,14 @@ jobs:
     - name: Run tests
       shell: cmake -P {0}
       run: |
-        include(ProcessorCount)
-        ProcessorCount(N)
+        # include(ProcessorCount)
+        # ProcessorCount(N)
 
         set(ENV{CTEST_OUTPUT_ON_FAILURE} "ON")
 
+        # The tests I usually write are not thread safe, but I can add -j ${N} to run tests in parallel.
         execute_process(
-          COMMAND ctest -j ${N}
+          COMMAND ctest --verbose
           WORKING_DIRECTORY build
           RESULT_VARIABLE result
           OUTPUT_VARIABLE output
